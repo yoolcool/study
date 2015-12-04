@@ -9,6 +9,12 @@ using System.Threading;
 
 namespace Server1
 {
+    public class AsyncStateData
+    {
+        public byte[] Buffer;
+        public Socket Socket;
+    }
+
     class Program
     {
         static void Main(string[] args)
@@ -17,7 +23,7 @@ namespace Server1
             serverThread.IsBackground = true;
             serverThread.Start();
 
-            Thread.Sleep(500);
+            Thread.Sleep(1000);
 
             int clientCount = 10;
             for (int i = 0; i < clientCount; i++)
@@ -44,24 +50,33 @@ namespace Server1
                 {
                     Socket clntSocket = srvSocket.Accept();
 
-                    ThreadPool.QueueUserWorkItem((WaitCallback)clientSocketProcess, clntSocket);
+                    AsyncStateData data = new AsyncStateData();
+                    data.Buffer = new byte[1024];
+                    data.Socket = clntSocket;
+
+                    clntSocket.BeginReceive(data.Buffer, 0, data.Buffer.Length, SocketFlags.None, asyncReceiveCallback, data);
                 }
 
             }
         }
 
-        private static void clientSocketProcess(object state)
+        private static void asyncReceiveCallback(IAsyncResult asyncResult)
         {
-            Socket clntSocket = state as Socket;
+            AsyncStateData rcvData = asyncResult.AsyncState as AsyncStateData;
 
-            byte[] recvBytes = new byte[1024];
-
-            int nRecv = clntSocket.Receive(recvBytes);
-            string txt = Encoding.UTF8.GetString(recvBytes, 0, nRecv);
+            int nRecv = rcvData.Socket.EndReceive(asyncResult);
+            string txt = Encoding.UTF8.GetString(rcvData.Buffer, 0, nRecv);
 
             byte[] sendBytes = Encoding.UTF8.GetBytes("Hello: " + txt);
-            clntSocket.Send(sendBytes);
-            clntSocket.Close();
+            rcvData.Socket.BeginSend(sendBytes, 0, sendBytes.Length, SocketFlags.None, asyncSendCallback, rcvData.Socket);
+
+        }
+
+        private static void asyncSendCallback(IAsyncResult asyncResult)
+        {
+            Socket socket = asyncResult.AsyncState as Socket;
+            socket.EndSend(asyncResult);
+            socket.Close();
         }
 
         private static void clientFunc(object obj)
