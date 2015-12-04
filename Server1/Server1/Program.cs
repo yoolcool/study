@@ -113,15 +113,7 @@ namespace Server1
                 byte[] buf = Encoding.UTF8.GetBytes(DateTime.Now.ToString());
                 socket.Send(buf);
 
-                //byte[] recvBytes = new byte[1024];
-                //int nRecv = socket.Receive(recvBytes);
-                //string txt = Encoding.UTF8.GetString(recvBytes, 0, nRecv);
-
-                //Console.WriteLine(txt);
-
                 socket.Close();
-                //Console.WriteLine("TCP Client socket: Closed");
-
             }
 
         }
