@@ -19,9 +19,13 @@ namespace Server1
 
             Thread.Sleep(500);
 
-            Thread clientThread = new Thread(clientFunc);
-            clientThread.IsBackground = true;
-            clientThread.Start();
+            int clientCount = 10;
+            for (int i = 0; i < clientCount; i++)
+            {
+                Thread clientThread = new Thread(clientFunc);
+                clientThread.IsBackground = true;
+                clientThread.Start();
+            }
 
             Console.WriteLine("종료하려면 아무 키나 누르세요.");
             Console.ReadLine();
@@ -40,17 +44,24 @@ namespace Server1
                 {
                     Socket clntSocket = srvSocket.Accept();
 
-                    byte[] recvBytes = new byte[1024];
-
-                    int nRecv = clntSocket.Receive(recvBytes);
-                    string txt = Encoding.UTF8.GetString(recvBytes, 0, nRecv);
-
-                    byte[] sendBytes = Encoding.UTF8.GetBytes("Hello: " + txt);
-                    clntSocket.Send(sendBytes);
-                    clntSocket.Close();
+                    ThreadPool.QueueUserWorkItem((WaitCallback)clientSocketProcess, clntSocket);
                 }
 
             }
+        }
+
+        private static void clientSocketProcess(object state)
+        {
+            Socket clntSocket = state as Socket;
+
+            byte[] recvBytes = new byte[1024];
+
+            int nRecv = clntSocket.Receive(recvBytes);
+            string txt = Encoding.UTF8.GetString(recvBytes, 0, nRecv);
+
+            byte[] sendBytes = Encoding.UTF8.GetBytes("Hello: " + txt);
+            clntSocket.Send(sendBytes);
+            clntSocket.Close();
         }
 
         private static void clientFunc(object obj)
