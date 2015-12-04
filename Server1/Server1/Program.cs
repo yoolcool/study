@@ -71,7 +71,7 @@ namespace Server1
                 Console.WriteLine(txt);
 
                 socket.Close();
-                Console.WriteLine("TCP CLiendt socket: Closed");
+                Console.WriteLine("TCP Client socket: Closed");
 
             }
 
