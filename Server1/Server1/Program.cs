@@ -9,21 +9,85 @@ using System.Threading;
 
 namespace Server1
 {
-    public class AsyncStateData
+    class NewServer
     {
-        public byte[] Buffer;
-        public Socket Socket;
+        private Socket m_ServerSocket;
+        private List<Socket> m_ClientSocket;
+        private byte[] szData;
+
+        public void InitServer()
+        {
+            m_ClientSocket = new List<Socket>();
+
+            try
+            {
+                m_ServerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+                IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, 11200);
+                m_ServerSocket.Bind(endPoint);
+                m_ServerSocket.Listen(10);
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+            
+            SocketAsyncEventArgs args = new SocketAsyncEventArgs();
+            args.Completed += new EventHandler<SocketAsyncEventArgs>(Accept_Completed);
+            m_ServerSocket.AcceptAsync(args);
+        }
+
+        private void Accept_Completed(object sender, SocketAsyncEventArgs e)
+        {
+            Socket ClientSocket = e.AcceptSocket;
+            m_ClientSocket.Add(ClientSocket);
+
+            if (m_ClientSocket != null)
+            {
+                SocketAsyncEventArgs args = new SocketAsyncEventArgs();
+                szData = new byte[1024];
+                args.SetBuffer(szData, 0, 1024);
+                args.UserToken = m_ClientSocket;
+                args.Completed += new EventHandler<SocketAsyncEventArgs>(Receive_Completed);
+                ClientSocket.ReceiveAsync(args);
+            }
+
+            e.AcceptSocket = null;
+            m_ServerSocket.AcceptAsync(e);
+        }
+        private void Receive_Completed(object sender, SocketAsyncEventArgs e)
+        {
+            Socket ClientSocket = (Socket)sender;
+            if (ClientSocket.Connected && e.BytesTransferred > 0)
+            {
+                byte[] szData = e.Buffer;    // 데이터 수신
+                string sData = Encoding.UTF8.GetString(szData);
+
+                Console.WriteLine(sData.Replace("\0", "").Trim());
+
+                for (int i = 0; i < szData.Length; i++)
+                {
+                    szData[i] = 0;
+                }
+                e.SetBuffer(szData, 0, 1024);
+                ClientSocket.ReceiveAsync(e);
+            }
+            else
+            {
+                ClientSocket.Disconnect(false);
+                ClientSocket.Dispose();
+                m_ClientSocket.Remove(ClientSocket);
+            }
+        }
     }
+
 
     class Program
     {
         static void Main(string[] args)
         {
-            Thread serverThread = new Thread(serverFunc);
-            serverThread.IsBackground = true;
-            serverThread.Start();
-
-            Thread.Sleep(1000);
+            NewServer svr = new NewServer();
+            svr.InitServer();
 
             int clientCount = 10;
             for (int i = 0; i < clientCount; i++)
@@ -37,48 +101,7 @@ namespace Server1
             Console.ReadLine();
 
         }
-
-        private static void serverFunc(object obj)
-        {
-            using (Socket srvSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
-            {
-                IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, 11200);
-                srvSocket.Bind(endPoint);
-                srvSocket.Listen(10);
-
-                while (true)
-                {
-                    Socket clntSocket = srvSocket.Accept();
-
-                    AsyncStateData data = new AsyncStateData();
-                    data.Buffer = new byte[1024];
-                    data.Socket = clntSocket;
-
-                    clntSocket.BeginReceive(data.Buffer, 0, data.Buffer.Length, SocketFlags.None, asyncReceiveCallback, data);
-                }
-
-            }
-        }
-
-        private static void asyncReceiveCallback(IAsyncResult asyncResult)
-        {
-            AsyncStateData rcvData = asyncResult.AsyncState as AsyncStateData;
-
-            int nRecv = rcvData.Socket.EndReceive(asyncResult);
-            string txt = Encoding.UTF8.GetString(rcvData.Buffer, 0, nRecv);
-
-            byte[] sendBytes = Encoding.UTF8.GetBytes("Hello: " + txt);
-            rcvData.Socket.BeginSend(sendBytes, 0, sendBytes.Length, SocketFlags.None, asyncSendCallback, rcvData.Socket);
-
-        }
-
-        private static void asyncSendCallback(IAsyncResult asyncResult)
-        {
-            Socket socket = asyncResult.AsyncState as Socket;
-            socket.EndSend(asyncResult);
-            socket.Close();
-        }
-
+        
         private static void clientFunc(object obj)
         {
             using (Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
@@ -90,14 +113,14 @@ namespace Server1
                 byte[] buf = Encoding.UTF8.GetBytes(DateTime.Now.ToString());
                 socket.Send(buf);
 
-                byte[] recvBytes = new byte[1024];
-                int nRecv = socket.Receive(recvBytes);
-                string txt = Encoding.UTF8.GetString(recvBytes, 0, nRecv);
+                //byte[] recvBytes = new byte[1024];
+                //int nRecv = socket.Receive(recvBytes);
+                //string txt = Encoding.UTF8.GetString(recvBytes, 0, nRecv);
 
-                Console.WriteLine(txt);
+                //Console.WriteLine(txt);
 
                 socket.Close();
-                Console.WriteLine("TCP Client socket: Closed");
+                //Console.WriteLine("TCP Client socket: Closed");
 
             }
 
